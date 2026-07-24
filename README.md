@@ -135,11 +135,13 @@ curl -N -X POST http://localhost:8000/chat \
 
 로컬에서 파이썬으로 바로 돌리려면:
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 (이 경우 Qdrant는 `docker run -p 6333:6333 qdrant/qdrant`로 별도 기동 필요)
+
+> **Python 버전 주의**: `pydantic-core`가 아직 Python 3.14용 사전 빌드 wheel을 제공하지 않아 `python3.14`로 venv를 만들면 설치 단계에서 빌드 실패한다. `python3.12`(또는 3.13)를 명시적으로 지정할 것 — 자세한 실패 로그는 [docs/concepts/07-docker-and-local-verification.md](docs/concepts/07-docker-and-local-verification.md) 참고.
 
 ## 📂 구조
 
@@ -169,3 +171,12 @@ app/
 
 - [docs/architecture.md](docs/architecture.md) — LangGraph 라우팅 설계와 Java 서비스와의 역할 분담 상세 설명
 - [target-tracking-service/docs/ai-analysis.md](../target-tracking-service/docs/ai-analysis.md) — 기존 Java RAG 위협 분석 시스템
+- `docs/concepts/` — 파일 단위 상세 구현 노트
+  - [01-config-and-schemas.md](docs/concepts/01-config-and-schemas.md)
+  - [02-gemini-client-and-graceful-degradation.md](docs/concepts/02-gemini-client-and-graceful-degradation.md)
+  - [03-qdrant-vector-stores.md](docs/concepts/03-qdrant-vector-stores.md)
+  - [04-langgraph-routing.md](docs/concepts/04-langgraph-routing.md)
+  - [05-kafka-consumer.md](docs/concepts/05-kafka-consumer.md)
+  - [06-fastapi-app-and-sse-streaming.md](docs/concepts/06-fastapi-app-and-sse-streaming.md)
+  - [07-docker-and-local-verification.md](docs/concepts/07-docker-and-local-verification.md)
+  - [08-k3s-cluster-capacity-check.md](docs/concepts/08-k3s-cluster-capacity-check.md) — 지금 클러스터에 이 서비스를 얹을 여유가 있는지 실측한 기록

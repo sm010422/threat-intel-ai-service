@@ -1,22 +1,8 @@
-from typing import Literal
-
 from pydantic import BaseModel
 
 
 class ChatRequest(BaseModel):
     question: str
-
-
-class SourceChunk(BaseModel):
-    text: str
-    score: float
-    metadata: dict
-
-
-class ChatRouteResult(BaseModel):
-    route: Literal["doc_rag", "pattern_search"]
-    context: str
-    sources: list[SourceChunk]
 
 
 class IngestDocResponse(BaseModel):
