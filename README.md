@@ -180,3 +180,7 @@ app/
   - [06-fastapi-app-and-sse-streaming.md](docs/concepts/06-fastapi-app-and-sse-streaming.md)
   - [07-docker-and-local-verification.md](docs/concepts/07-docker-and-local-verification.md)
   - [08-k3s-cluster-capacity-check.md](docs/concepts/08-k3s-cluster-capacity-check.md) — 지금 클러스터에 이 서비스를 얹을 여유가 있는지 실측한 기록
+  - [09-github-actions-ci-and-dockerhub.md](docs/concepts/09-github-actions-ci-and-dockerhub.md) — CI/CD 구성과 Docker Hub 인증 트러블슈팅
+  - [10-live-verification-chat-and-ingest.md](docs/concepts/10-live-verification-chat-and-ingest.md) — 실제 클러스터에서 `/chat`/`/ingest/doc` 검증, 발견/수정한 버그 2건
+- `k3s-msa-infrastructure/docs/Threat-Intel-AI-Service-K3s-Deployment.md` — 배포 매니페스트/ArgoCD/Image Updater 등록 기록
+- `k3s-msa-infrastructure/docs/Threat-Intel-AI-Service-Cost-and-Resource-Verification.md` — 비용/리소스 실측
