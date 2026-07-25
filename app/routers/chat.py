@@ -33,13 +33,15 @@ async def _stream_chat(question: str) -> AsyncGenerator[str, None]:
     sources = result["sources"]
     prompt = _build_prompt(route, question, result["context"])
 
-    queue: asyncio.Queue[str | None] = asyncio.Queue()
+    queue: asyncio.Queue[str | BaseException | None] = asyncio.Queue()
     loop = asyncio.get_running_loop()
 
     def produce() -> None:
         try:
             for token in generate_stream(prompt):
                 loop.call_soon_threadsafe(queue.put_nowait, token)
+        except Exception as exc:  # noqa: BLE001 - surfaced to the client below, not swallowed
+            loop.call_soon_threadsafe(queue.put_nowait, exc)
         finally:
             loop.call_soon_threadsafe(queue.put_nowait, None)
 
@@ -48,10 +50,13 @@ async def _stream_chat(question: str) -> AsyncGenerator[str, None]:
     yield f"event: route\ndata: {json.dumps({'route': route})}\n\n"
 
     while True:
-        token = await queue.get()
-        if token is None:
+        item = await queue.get()
+        if item is None:
             break
-        yield f"data: {json.dumps({'token': token})}\n\n"
+        if isinstance(item, BaseException):
+            yield f"event: error\ndata: {json.dumps({'message': str(item)})}\n\n"
+            break
+        yield f"data: {json.dumps({'token': item})}\n\n"
 
     yield f"event: sources\ndata: {json.dumps(sources)}\n\n"
     yield "event: done\ndata: {}\n\n"
