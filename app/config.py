@@ -6,7 +6,7 @@ class Settings(BaseSettings):
 
     # LLM
     gemini_api_key: str = ""
-    gemini_chat_model: str = "gemini-flash-latest"
+    gemini_chat_model: str = "gemini-flash-lite-latest"
     gemini_embedding_model: str = "models/gemini-embedding-001"
     embedding_dimension: int = 768
 

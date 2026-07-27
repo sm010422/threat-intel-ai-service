@@ -33,10 +33,16 @@ EVAL_QUESTIONS = [
     "과거에 DRONE-001 표적이 탐지된 이력이 있었나?",
 ]
 
-# Gemini 무료 티어는 분당 요청 수(RPM)가 낮다. RAGAS는 기본적으로 최대 16개
-# worker로 병렬 호출하는데, 그러면 곧바로 429(ResourceExhausted)에 걸린다.
-# max_workers=1로 완전히 직렬화하고, 재시도 간격/횟수를 넉넉히 잡아서
-# rate limit을 자연스럽게 흡수하게 한다 -- 느리지만 확실하게 끝난다.
+# app/config.py의 gemini_chat_model과 동일한 모델을 judge로 쓴다. gemini-flash-latest는
+# 이 계정에서 실제로는 gemini-3.6-flash로 연결되는데 무료 티어 일일 한도가 20회뿐이라
+# (RAGAS 한 번 실행에 6개 이상의 LLM 호출이 필요) 곧바로 소진된다 -- gemini-flash-lite-latest는
+# 같은 상황에서 정상 응답하는 걸 실측으로 확인해서 이걸로 고정했다.
+JUDGE_MODEL = "gemini-flash-lite-latest"
+
+# Gemini 무료 티어는 요청 한도가 낮다. RAGAS는 기본적으로 최대 16개 worker로
+# 병렬 호출하는데, 그러면 곧바로 429(ResourceExhausted)에 걸린다. max_workers=1로
+# 완전히 직렬화하고, 재시도 간격/횟수를 넉넉히 잡아서 rate limit을 자연스럽게
+# 흡수하게 한다 -- 느리지만 확실하게 끝난다.
 JUDGE_RUN_CONFIG = RunConfig(max_workers=1, max_wait=30, max_retries=6, timeout=300)
 
 
@@ -66,10 +72,11 @@ async def collect_sample(client: httpx.AsyncClient, base_url: str, question: str
                 elif isinstance(payload, dict) and "token" in payload:
                     answer_parts.append(payload["token"])
 
+    # RAGAS 0.2.x 스키마 필드명 (구버전 question/answer/contexts에서 이름이 바뀌었다).
     return {
-        "question": question,
-        "answer": "".join(answer_parts) or "(응답 없음)",
-        "contexts": contexts or ["(검색된 컨텍스트 없음)"],
+        "user_input": question,
+        "response": "".join(answer_parts) or "(응답 없음)",
+        "retrieved_contexts": contexts or ["(검색된 컨텍스트 없음)"],
     }
 
 
@@ -95,8 +102,8 @@ def main() -> None:
     samples = asyncio.run(collect_all(args.base_url))
     dataset = Dataset.from_list(samples)
 
-    print("[2/3] RAGAS 평가 실행 중 (judge: gemini-flash-latest)...")
-    judge_llm = ChatGoogleGenerativeAI(model="gemini-flash-latest")
+    print(f"[2/3] RAGAS 평가 실행 중 (judge: {JUDGE_MODEL})...")
+    judge_llm = ChatGoogleGenerativeAI(model=JUDGE_MODEL)
     judge_embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
 
     result = evaluate(
@@ -110,7 +117,7 @@ def main() -> None:
     print("[3/3] 결과")
     df = result.to_pandas()
     with __import__("pandas").option_context("display.max_colwidth", 40):
-        print(df[["question", "faithfulness", "answer_relevancy"]].to_string(index=False))
+        print(df[["user_input", "faithfulness", "answer_relevancy"]].to_string(index=False))
 
     out_path = "eval/last_run.json"
     df.to_json(out_path, orient="records", force_ascii=False, indent=2)
