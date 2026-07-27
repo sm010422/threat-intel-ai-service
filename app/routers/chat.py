@@ -13,7 +13,7 @@ from app.models.schemas import ChatRequest
 router = APIRouter()
 
 
-def _build_prompt(route: str, question: str, context: str) -> str:
+def _build_prompt(route: str, question: str, context: str, tool_call: dict | None) -> str:
     if route == "pattern_search":
         instruction = (
             "아래는 과거 탐지 이력 중 질문과 유사한 항목들이다. "
@@ -24,14 +24,23 @@ def _build_prompt(route: str, question: str, context: str) -> str:
             "아래는 위협 인텔리전스 문서에서 검색된 관련 내용이다. "
             "이를 근거로 질문에 답하라. 문서에 없는 내용은 추측하지 말고 모른다고 답하라."
         )
-    return f"{instruction}\n\n[검색된 컨텍스트]\n{context}\n\n[질문]\n{question}\n\n[답변]"
+
+    tool_note = ""
+    if tool_call:
+        tool_note = (
+            f"\n\n[도구 호출 결과] assess_threat_level({tool_call['tool_name']}) → "
+            f"{tool_call['tool_result']} 등급. 답변에 이 등급을 반영하라."
+        )
+
+    return f"{instruction}\n\n[검색된 컨텍스트]\n{context}{tool_note}\n\n[질문]\n{question}\n\n[답변]"
 
 
 async def _stream_chat(question: str) -> AsyncGenerator[str, None]:
     result = await classify_and_retrieve(question)
     route = result["route"]
     sources = result["sources"]
-    prompt = _build_prompt(route, question, result["context"])
+    tool_call = result.get("tool_call")
+    prompt = _build_prompt(route, question, result["context"], tool_call)
 
     queue: asyncio.Queue[str | BaseException | None] = asyncio.Queue()
     loop = asyncio.get_running_loop()
@@ -48,6 +57,8 @@ async def _stream_chat(question: str) -> AsyncGenerator[str, None]:
     loop.run_in_executor(None, produce)
 
     yield f"event: route\ndata: {json.dumps({'route': route})}\n\n"
+    if tool_call:
+        yield f"event: tool_call\ndata: {json.dumps(tool_call)}\n\n"
 
     while True:
         item = await queue.get()

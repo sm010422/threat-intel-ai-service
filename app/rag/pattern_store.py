@@ -53,6 +53,8 @@ async def search_patterns(query: str, top_k: int | None = None) -> list[dict]:
             "metadata": {
                 "target_id": point.payload["target_id"],
                 "target_type": point.payload["target_type"],
+                "altitude": point.payload["altitude"],
+                "speed": point.payload["speed"],
                 "observed_at": point.payload["observed_at"],
             },
         }

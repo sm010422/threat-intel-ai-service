@@ -1,0 +1,6 @@
+# 평가 전용 의존성. 메인 앱(requirements.txt)과 분리해서, 프로덕션 이미지에는
+# ragas/langchain 같은 무거운 평가 전용 패키지가 안 들어가게 한다.
+httpx==0.28.1
+ragas==0.2.10
+langchain-google-genai==2.0.7
+datasets==3.2.0

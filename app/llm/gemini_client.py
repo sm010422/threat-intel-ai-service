@@ -10,11 +10,13 @@ from collections.abc import Generator
 import google.generativeai as genai
 
 from app.config import settings
+from app.graph.tools import THREAT_ASSESSMENT_TOOL, assess_threat_level
 
 if settings.ai_enabled:
     genai.configure(api_key=settings.gemini_api_key)
 
 _chat_model = None
+_tool_model = None
 
 
 def _get_chat_model() -> genai.GenerativeModel:
@@ -22,6 +24,13 @@ def _get_chat_model() -> genai.GenerativeModel:
     if _chat_model is None:
         _chat_model = genai.GenerativeModel(settings.gemini_chat_model)
     return _chat_model
+
+
+def _get_tool_model() -> genai.GenerativeModel:
+    global _tool_model
+    if _tool_model is None:
+        _tool_model = genai.GenerativeModel(settings.gemini_chat_model, tools=[THREAT_ASSESSMENT_TOOL])
+    return _tool_model
 
 
 def embed_text(text: str, task_type: str = "retrieval_document") -> list[float]:
@@ -66,6 +75,37 @@ def classify_question(question: str) -> str:
     if any(k in question for k in keywords):
         return "pattern_search"
     return "doc_rag"
+
+
+def call_with_tools(prompt: str) -> dict:
+    """One Gemini turn with the threat-assessment tool bound.
+
+    The model itself decides whether the question warrants calling
+    `assess_threat_level` -- this isn't a hardcoded branch, it's genuine
+    function-calling: Gemini returns a `function_call` part instead of text
+    when it decides the tool applies, we execute the real Python function,
+    and report what happened back to the caller (LangGraph node).
+    """
+    if not settings.ai_enabled:
+        return {"tool_called": False, "tool_name": None, "tool_result": None}
+
+    try:
+        response = _get_tool_model().generate_content(prompt)
+        part = response.candidates[0].content.parts[0]
+        function_call = getattr(part, "function_call", None)
+
+        if function_call and function_call.name == "assess_threat_level":
+            args = dict(function_call.args)
+            result = assess_threat_level(
+                target_type=str(args.get("target_type", "")),
+                altitude=float(args.get("altitude", 0)),
+                speed=float(args.get("speed", 0)),
+            )
+            return {"tool_called": True, "tool_name": "assess_threat_level", "tool_result": result}
+    except Exception:
+        pass
+
+    return {"tool_called": False, "tool_name": None, "tool_result": None}
 
 
 def generate_stream(prompt: str) -> Generator[str, None, None]:
