@@ -107,6 +107,11 @@ data: {}
 
 - 문서/교리 관련 질문 → `doc_rag` (Qdrant `threat_documents` 검색)
 - "과거에 이런 표적 있었나?" 류 질문 → `pattern_search` (Qdrant `target_history` 검색, 실제 Kafka 이력 기반)
+  - 이 경로에서는 이력을 근거로 정량 등급 평가가 필요하다고 모델이 판단하면 `assess_threat_level` 도구를 직접 호출한다 (Gemini function-calling — 그래프가 강제로 부르는 게 아니라 모델이 결정). 호출되면 `event: tool_call`이 추가로 온다:
+    ```
+    event: tool_call
+    data: {"tool_called": true, "tool_name": "assess_threat_level", "tool_result": "MEDIUM"}
+    ```
 
 ## 🚀 빠른 시작
 
@@ -182,5 +187,6 @@ app/
   - [08-k3s-cluster-capacity-check.md](docs/concepts/08-k3s-cluster-capacity-check.md) — 지금 클러스터에 이 서비스를 얹을 여유가 있는지 실측한 기록
   - [09-github-actions-ci-and-dockerhub.md](docs/concepts/09-github-actions-ci-and-dockerhub.md) — CI/CD 구성과 Docker Hub 인증 트러블슈팅
   - [10-live-verification-chat-and-ingest.md](docs/concepts/10-live-verification-chat-and-ingest.md) — 실제 클러스터에서 `/chat`/`/ingest/doc` 검증, 발견/수정한 버그 2건
-- `k3s-msa-infrastructure/docs/Threat-Intel-AI-Service-K3s-Deployment.md` — 배포 매니페스트/ArgoCD/Image Updater 등록 기록
+  - [11-tool-calling-node-and-ragas-evaluation.md](docs/concepts/11-tool-calling-node-and-ragas-evaluation.md) — Gemini function-calling 노드, RAGAS 평가, `gemini-flash-latest` 일일 할당량 함정
+- `k3s-msa-infrastructure/docs/Threat-Intel-AI-Service-K3s-Deployment.md` — 배포 매니페스트/ArgoCD/Image Updater 등록 기록 (+ `/ai` Ingress path 추가)
 - `k3s-msa-infrastructure/docs/Threat-Intel-AI-Service-Cost-and-Resource-Verification.md` — 비용/리소스 실측
