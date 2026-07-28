@@ -8,6 +8,10 @@ Each event is embedded and stored in the `target_history` Qdrant collection,
 building the actual detection history that pattern_search queries against
 (the Java service only compares against a fixed 10-pattern knowledge base,
 never against real historical detections).
+
+Gated behind settings.auto_index_enabled (default False) -- with no
+filtering this consumed the Gemini free-tier daily embedding quota (1000/day)
+in well under an hour once the ADS-B feed was flowing.
 """
 
 import json
@@ -41,6 +45,8 @@ async def run_consumer() -> None:
     try:
         async for message in consumer:
             try:
+                if not settings.auto_index_enabled:
+                    continue
                 event = TargetEvent.model_validate(message.value)
                 await upsert_target_event(event)
                 logger.info("Indexed target event: %s", event.targetId)
