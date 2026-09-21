@@ -48,6 +48,10 @@ classify (Gemini 분류 프롬프트, 실패 시 키워드 휴리스틱 폴백)
 
 두 컬렉션 모두 Gemini `gemini-embedding-001`을 768차원으로 임베딩한다 (`output_dimensionality=768`).
 
+## 리랭킹
+
+두 검색(`doc_rag`, `pattern_search`) 모두 벡터 유사도만으로 top_k(기본 3개)를 바로 확정하지 않고, `rerank_candidates`(기본 10개)만큼 넓게 뽑은 뒤 Cohere Rerank(`rerank-v3.5`)로 재정렬해서 top_k로 좁힌다 (`app/rag/reranker.py`). 자세한 배경은 `docs/concepts/13-reranker.md` 참고.
+
 ## Kafka 연동
 
 `target-tracking-service`가 생산하는 동일한 `target-tracking` 토픽을 구독하되, consumer group을 `threat-intel-ai-service`로 분리했다. Kafka는 토픽 하나를 여러 consumer group에 독립적으로 팬아웃하므로, Java 서비스의 `target-tracking-group`과 오프셋을 공유하지 않고 각자 전체 스트림을 받는다.
@@ -58,5 +62,7 @@ classify (Gemini 분류 프롬프트, 실패 시 키워드 휴리스틱 폴백)
 - `/chat`은 `event: error`만 반환
 - `/ingest/doc`은 503
 - Kafka consumer는 계속 돌지만 임베딩 실패를 로그로 남기고 다음 메시지로 넘어감
+
+`COHERE_API_KEY`가 없으면 리랭킹 단계를 건너뛰고 벡터 유사도 순서 그대로 top_k를 반환한다 (리랭커는 검색 품질을 높이는 보강 단계일 뿐, 없어도 `/chat` 자체는 그대로 동작). 리랭크 API 호출이 실패해도(네트워크/쿼터) 동일하게 폴백한다.
 
 Java 서비스가 API 키 미설정 시 규칙 기반 위협 등급으로 폴백하는 것과 동일한 설계 원칙이다 — AI가 없어도 서비스 자체는 죽지 않는다.

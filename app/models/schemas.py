@@ -13,6 +13,7 @@ class IngestDocResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     ai_enabled: bool
+    rerank_enabled: bool
     qdrant_connected: bool
     kafka_consumer_running: bool
 

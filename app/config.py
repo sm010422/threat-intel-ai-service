@@ -35,9 +35,20 @@ class Settings(BaseSettings):
     chunk_overlap: int = 100
     top_k: int = 3
 
+    # Rerank (Cohere) -- top_k보다 넓게 뽑은 뒤(rerank_candidates) 재정렬해서 top_k로 좁힌다.
+    # 로컬 cross-encoder(bge-reranker 등)는 파드 메모리 제한(384Mi, GPU 없음)에 안 맞아서
+    # Gemini와 같은 API 호출 방식으로 통일했다.
+    cohere_api_key: str = ""
+    cohere_rerank_model: str = "rerank-v3.5"
+    rerank_candidates: int = 10
+
     @property
     def ai_enabled(self) -> bool:
         return bool(self.gemini_api_key)
+
+    @property
+    def rerank_enabled(self) -> bool:
+        return bool(self.cohere_api_key)
 
 
 settings = Settings()

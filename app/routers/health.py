@@ -13,6 +13,7 @@ async def health() -> HealthResponse:
     return HealthResponse(
         status="ok",
         ai_enabled=settings.ai_enabled,
+        rerank_enabled=settings.rerank_enabled,
         qdrant_connected=await is_connected(),
         kafka_consumer_running=kafka_consumer.is_running,
     )

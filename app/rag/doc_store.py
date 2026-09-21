@@ -6,6 +6,7 @@ from app.config import settings
 from app.llm.gemini_client import embed_text
 from app.rag.chunking import chunk_text
 from app.rag.qdrant_store import get_client
+from app.rag.reranker import rerank
 
 
 async def ingest_document(filename: str, text: str) -> tuple[str, int]:
@@ -35,13 +36,16 @@ async def ingest_document(filename: str, text: str) -> tuple[str, int]:
 
 
 async def search_documents(query: str, top_k: int | None = None) -> list[dict]:
+    final_k = top_k or settings.top_k
+    fetch_k = settings.rerank_candidates if settings.rerank_enabled else final_k
+
     embedding = embed_text(query, task_type="retrieval_query")
     results = await get_client().query_points(
         collection_name=settings.qdrant_doc_collection,
         query=embedding,
-        limit=top_k or settings.top_k,
+        limit=fetch_k,
     )
-    return [
+    candidates = [
         {
             "text": point.payload["text"],
             "score": point.score,
@@ -53,3 +57,4 @@ async def search_documents(query: str, top_k: int | None = None) -> list[dict]:
         }
         for point in results.points
     ]
+    return rerank(query, candidates, final_k)
