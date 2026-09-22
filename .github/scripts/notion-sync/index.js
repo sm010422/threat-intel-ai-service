@@ -62,14 +62,19 @@ function diffBase() {
 
 function changedMarkdownFiles() {
   const base = diffBase();
-  const out = execSync(`git diff --name-status ${base} HEAD -- "docs/**/*.md"`).toString();
+  // Plain git pathspecs don't treat "**" as "zero or more directories" the
+  // way GitHub Actions' `paths:` filter does, so "docs/**/*.md" silently
+  // misses top-level files like docs/foo.md (only docs/sub/foo.md would
+  // match). Diff the whole docs/ tree instead and filter by extension here.
+  const out = execSync(`git diff --name-status ${base} HEAD -- docs`).toString();
   return out
     .split("\n")
     .filter(Boolean)
     .map((line) => {
       const [status, file] = line.split("\t");
       return { status, file };
-    });
+    })
+    .filter(({ file }) => file.endsWith(".md"));
 }
 
 function parentForNewPage(file) {
@@ -162,6 +167,7 @@ async function main() {
     if (map[file] !== before) mapChanged = true;
   }
 
+  if (mapChanged) saveMap(map);
   commitMapIfChanged(mapChanged);
 }
 
