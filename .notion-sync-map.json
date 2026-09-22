@@ -12,5 +12,6 @@
   "docs/concepts/10-live-verification-chat-and-ingest.md": "3e250b17-ecd1-817d-8e45-cd5bb898a95b",
   "docs/concepts/11-tool-calling-node-and-ragas-evaluation.md": "3e250b17-ecd1-81ea-bb25-dd45bfeab594",
   "docs/concepts/12-dual-rag-architecture-split.md": "3e250b17-ecd1-8159-acd6-e6055f8b8c94",
-  "docs/concepts/13-reranker.md": "3e250b17-ecd1-81fa-b5fd-ce15f1b48170"
+  "docs/concepts/13-reranker.md": "3e250b17-ecd1-81fa-b5fd-ce15f1b48170",
+  "docs/observability.md": "3e350b17-ecd1-8108-90e9-c8c4e0256f57"
 }
