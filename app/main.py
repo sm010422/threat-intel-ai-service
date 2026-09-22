@@ -2,9 +2,9 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
-from prometheus_client import make_asgi_app
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.config import settings
 from app.kafka.consumer import run_consumer
@@ -41,10 +41,16 @@ app.add_middleware(
 app.include_router(health.router, tags=["health"])
 app.include_router(chat.router, tags=["chat"])
 app.include_router(ingest.router, tags=["ingest"])
-app.mount("/metrics", make_asgi_app())
-# 다른 라우터들과 마찬가지로 /ai prefix로도 마운트 -- Traefik Ingress가 /ai만
-# 외부로 열어두므로(ingress.yaml), 이걸 안 하면 /metrics는 클러스터 내부에서만 보인다.
-app.mount("/ai/metrics", make_asgi_app())
+
+
+@app.get("/metrics", include_in_schema=False)
+@app.get("/ai/metrics", include_in_schema=False)
+def metrics() -> Response:
+    # app.mount(make_asgi_app())로 했더니 trailing slash 없는 요청(/ai/metrics)이
+    # Starlette Mount의 기본 redirect_slashes 동작 때문에 http://로 307 리다이렉트되는
+    # 문제가 있었다 (Traefik이 TLS를 종단하는 구조라 실제로 https 뒤에서 http Location
+    # 헤더가 나가는 상황). 다른 라우터들과 똑같이 일반 route로 바꿔서 회피.
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 # target-tracking-service 대시보드가 같은 Traefik Ingress 아래 /ai prefix로 이 서비스를
 # 호출할 수 있도록, 동일한 라우터를 /ai prefix로 한 번 더 등록한다 (루트 경로는 하위 호환
