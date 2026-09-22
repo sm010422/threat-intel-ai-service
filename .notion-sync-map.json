@@ -1,0 +1,16 @@
+{
+  "docs/architecture.md": "3e250b17-ecd1-810d-8cfe-f275b601a630",
+  "docs/concepts/01-config-and-schemas.md": "3e250b17-ecd1-8194-9ae2-fd5ecf9d096a",
+  "docs/concepts/02-gemini-client-and-graceful-degradation.md": "3e250b17-ecd1-811b-95d4-d4f1f52ce11b",
+  "docs/concepts/03-qdrant-vector-stores.md": "3e250b17-ecd1-81f8-be0c-d027541012c2",
+  "docs/concepts/04-langgraph-routing.md": "3e250b17-ecd1-81ab-b3f7-c2416a482b0d",
+  "docs/concepts/05-kafka-consumer.md": "3e250b17-ecd1-81c5-ad3a-cff07bd5e65e",
+  "docs/concepts/06-fastapi-app-and-sse-streaming.md": "3e250b17-ecd1-81c1-b825-fa492ac67ad4",
+  "docs/concepts/07-docker-and-local-verification.md": "3e250b17-ecd1-812b-a445-db19191b78d7",
+  "docs/concepts/08-k3s-cluster-capacity-check.md": "3e250b17-ecd1-81a8-8d2f-e0ca3664d19c",
+  "docs/concepts/09-github-actions-ci-and-dockerhub.md": "3e250b17-ecd1-81a6-aa99-d4bc6fe18823",
+  "docs/concepts/10-live-verification-chat-and-ingest.md": "3e250b17-ecd1-817d-8e45-cd5bb898a95b",
+  "docs/concepts/11-tool-calling-node-and-ragas-evaluation.md": "3e250b17-ecd1-81ea-bb25-dd45bfeab594",
+  "docs/concepts/12-dual-rag-architecture-split.md": "3e250b17-ecd1-8159-acd6-e6055f8b8c94",
+  "docs/concepts/13-reranker.md": "3e250b17-ecd1-81fa-b5fd-ce15f1b48170"
+}

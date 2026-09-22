@@ -1,0 +1,40 @@
+name: Notion Doc Sync
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**/*.md"
+
+# Avoid two syncs racing on the map-commit push.
+concurrency:
+  group: notion-doc-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install sync script dependencies
+        run: npm install --no-audit --no-fund --prefix .github/scripts/notion-sync
+
+      - name: Sync changed docs to Notion
+        run: node .github/scripts/notion-sync/index.js
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+          # docs/ -> repo root page, docs/concepts/ -> that repo's "concepts" subpage.
+          # Longest matching prefix wins, so keep concepts/ listed alongside docs/.
+          NOTION_DEFAULT_PARENTS: >-
+            {"docs/concepts/": "3e250b17-ecd1-8100-9873-d7da75959928",
+             "docs/": "3e250b17-ecd1-81fc-ac77-c6baff95191f"}
