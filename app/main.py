@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import make_asgi_app
 
 from app.config import settings
 from app.kafka.consumer import run_consumer
@@ -40,6 +41,10 @@ app.add_middleware(
 app.include_router(health.router, tags=["health"])
 app.include_router(chat.router, tags=["chat"])
 app.include_router(ingest.router, tags=["ingest"])
+app.mount("/metrics", make_asgi_app())
+# 다른 라우터들과 마찬가지로 /ai prefix로도 마운트 -- Traefik Ingress가 /ai만
+# 외부로 열어두므로(ingress.yaml), 이걸 안 하면 /metrics는 클러스터 내부에서만 보인다.
+app.mount("/ai/metrics", make_asgi_app())
 
 # target-tracking-service 대시보드가 같은 Traefik Ingress 아래 /ai prefix로 이 서비스를
 # 호출할 수 있도록, 동일한 라우터를 /ai prefix로 한 번 더 등록한다 (루트 경로는 하위 호환

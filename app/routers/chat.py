@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter
@@ -8,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from app.config import settings
 from app.graph.router_graph import classify_and_retrieve
 from app.llm.gemini_client import generate_stream
+from app.metrics import chat_route_total, retrieval_latency_seconds, tool_call_total
 from app.models.schemas import ChatRequest
 
 router = APIRouter()
@@ -36,11 +38,17 @@ def _build_prompt(route: str, question: str, context: str, tool_call: dict | Non
 
 
 async def _stream_chat(question: str) -> AsyncGenerator[str, None]:
+    started = time.monotonic()
     result = await classify_and_retrieve(question)
     route = result["route"]
     sources = result["sources"]
     tool_call = result.get("tool_call")
     prompt = _build_prompt(route, question, result["context"], tool_call)
+
+    retrieval_latency_seconds.labels(route=route).observe(time.monotonic() - started)
+    chat_route_total.labels(route=route).inc()
+    if tool_call:
+        tool_call_total.labels(tool_name=tool_call["tool_name"]).inc()
 
     queue: asyncio.Queue[str | BaseException | None] = asyncio.Queue()
     loop = asyncio.get_running_loop()

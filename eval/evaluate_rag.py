@@ -88,6 +88,15 @@ async def collect_all(base_url: str) -> list[dict]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="http://localhost:18000")
+    parser.add_argument(
+        "--fail-below",
+        type=float,
+        default=None,
+        help=(
+            "faithfulness/answer_relevancy 평균이 이 값 미만이면 exit code 1로 종료 "
+            "(CI 회귀 게이트용 -- 로컬 1회성 실행에서는 안 줘도 됨)"
+        ),
+    )
     args = parser.parse_args()
 
     if not os.environ.get("GEMINI_API_KEY"):
@@ -122,6 +131,17 @@ def main() -> None:
     out_path = "eval/last_run.json"
     df.to_json(out_path, orient="records", force_ascii=False, indent=2)
     print(f"\n전체 결과(답변/컨텍스트 포함) → {out_path}")
+
+    if args.fail_below is not None:
+        faithfulness_mean = df["faithfulness"].mean()
+        relevancy_mean = df["answer_relevancy"].mean()
+        print(f"\n평균 faithfulness={faithfulness_mean:.3f}, answer_relevancy={relevancy_mean:.3f} "
+              f"(기준 {args.fail_below})")
+        if faithfulness_mean < args.fail_below or relevancy_mean < args.fail_below:
+            raise SystemExit(
+                f"품질 회귀 감지: faithfulness={faithfulness_mean:.3f} 또는 "
+                f"answer_relevancy={relevancy_mean:.3f}가 기준({args.fail_below}) 미만입니다."
+            )
 
 
 if __name__ == "__main__":

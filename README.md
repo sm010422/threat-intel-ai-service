@@ -172,9 +172,16 @@ app/
     └── consumer.py      # target-tracking 토픽 구독 (독립 consumer group)
 ```
 
+## 📊 관측성 / 평가
+
+- `GET /ai/metrics` (또는 로컬 `GET /metrics`) — Prometheus 포맷으로 `/chat` 라우팅 분포, tool-call 횟수, RAG 검색 지연시간 노출
+- RAGAS 회귀 평가를 CI 워크플로(`workflow_dispatch` 수동 트리거)로 등록 — `gh workflow run eval.yml`. Gemini 무료 tier 쿼터 때문에 매 push/PR 자동 실행은 하지 않음
+- 자세한 내용 → [docs/observability.md](docs/observability.md)
+
 ## 📖 관련 문서
 
 - [docs/architecture.md](docs/architecture.md) — LangGraph 라우팅 설계와 Java 서비스와의 역할 분담 상세 설명
+- [docs/observability.md](docs/observability.md) — Prometheus 계측 + RAGAS 회귀 게이트 설계
 - [target-tracking-service/docs/ai-analysis.md](../target-tracking-service/docs/ai-analysis.md) — 기존 Java RAG 위협 분석 시스템
 - `docs/concepts/` — 파일 단위 상세 구현 노트
   - [01-config-and-schemas.md](docs/concepts/01-config-and-schemas.md)

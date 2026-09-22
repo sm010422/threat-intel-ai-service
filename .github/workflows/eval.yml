@@ -1,0 +1,49 @@
+name: RAGAS Regression Eval
+
+# 매 push/PR마다 자동 실행하지 않는다 -- Gemini 무료 tier 일일 한도가 워낙 낮아서
+# (docs/concepts/11-tool-calling-node-and-ragas-evaluation.md, target-tracking-service의
+# ANALYSIS_COOLDOWN 관련 주석 등 여러 곳에서 실측으로 확인된 제약) 자동화하면 CI가
+# 곧바로 429로 깨지거나, 대시보드 수동 테스트용 쿼터를 CI가 다 써버린다.
+# 대신 수동 트리거(workflow_dispatch)로 "품질 게이트를 원할 때 직접 돌리는" 회귀 평가로 둔다.
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'threat-intel-ai-service base URL (실제 운영 중인 공개 엔드포인트가 기본값)'
+        required: false
+        default: 'https://k3s-master.taildcdcee.ts.net/ai'
+      fail_below:
+        description: 'faithfulness/answer_relevancy 평균이 이 값 미만이면 CI 실패'
+        required: false
+        default: '0.5'
+
+jobs:
+  ragas-eval:
+    name: RAGAS faithfulness / answer_relevancy 회귀 평가
+    runs-on: ubuntu-24.04
+    steps:
+      - name: ✅ Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install eval dependencies
+        run: pip install -r eval/requirements.txt
+
+      - name: Run RAGAS evaluation against live service
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python eval/evaluate_rag.py \
+            --base-url "${{ inputs.base_url }}" \
+            --fail-below "${{ inputs.fail_below }}"
+
+      - name: Upload eval results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ragas-results
+          path: eval/last_run.json
