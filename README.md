@@ -107,10 +107,13 @@ data: {}
 
 - 문서/교리 관련 질문 → `doc_rag` (Qdrant `threat_documents` 검색)
 - "과거에 이런 표적 있었나?" 류 질문 → `pattern_search` (Qdrant `target_history` 검색, 실제 Kafka 이력 기반)
-  - 이 경로에서는 이력을 근거로 정량 등급 평가가 필요하다고 모델이 판단하면 `assess_threat_level` 도구를 직접 호출한다 (Gemini function-calling — 그래프가 강제로 부르는 게 아니라 모델이 결정). 호출되면 `event: tool_call`이 추가로 온다:
+  - 이 경로는 **멀티스텝 플래닝 에이전트**다 — 위협 등급 평가(`assess_threat_level`), 대응 절차 조회(`lookup_response_procedure`), 요격 자산 가용성 확인(`check_intercept_asset_availability`) 중 필요한 도구를 모델이 스스로 판단해 순서대로(최대 3단계) 호출한다. 그래프가 어떤 도구를 부를지 강제하지 않는 진짜 function-calling — 자세한 내용은 [docs/agent-planning.md](docs/agent-planning.md). 호출될 때마다 `event: tool_call`이 추가로 온다:
     ```
     event: tool_call
-    data: {"tool_called": true, "tool_name": "assess_threat_level", "tool_result": "MEDIUM"}
+    data: {"tool_called": true, "tool_name": "assess_threat_level", "tool_result": "HIGH"}
+
+    event: tool_call
+    data: {"tool_called": true, "tool_name": "check_intercept_asset_availability", "tool_result": "(시뮬레이션 데이터) ..."}
     ```
 
 ## 🚀 빠른 시작
@@ -182,6 +185,7 @@ app/
 
 - [docs/architecture.md](docs/architecture.md) — LangGraph 라우팅 설계와 Java 서비스와의 역할 분담 상세 설명
 - [docs/observability.md](docs/observability.md) — Prometheus 계측 + RAGAS 회귀 게이트 설계
+- [docs/agent-planning.md](docs/agent-planning.md) — 3개 도구를 순서대로 호출하는 멀티스텝 플래닝 에이전트 설계
 - [target-tracking-service/docs/ai-analysis.md](../target-tracking-service/docs/ai-analysis.md) — 기존 Java RAG 위협 분석 시스템
 - `docs/concepts/` — 파일 단위 상세 구현 노트
   - [01-config-and-schemas.md](docs/concepts/01-config-and-schemas.md)

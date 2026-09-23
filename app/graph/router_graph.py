@@ -42,5 +42,5 @@ def get_graph():
 
 
 async def classify_and_retrieve(question: str) -> GraphState:
-    result = await get_graph().ainvoke({"question": question, "sources": [], "tool_call": None})
+    result = await get_graph().ainvoke({"question": question, "sources": [], "tool_calls": []})
     return result

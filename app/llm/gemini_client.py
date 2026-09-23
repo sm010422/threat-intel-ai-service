@@ -5,12 +5,20 @@ Mirrors the graceful-degradation behavior of the sibling Java service
 must fall back to rule-based behavior instead of crashing.
 """
 
+import asyncio
+import inspect
 from collections.abc import Generator
 
 import google.generativeai as genai
 
 from app.config import settings
-from app.graph.tools import THREAT_ASSESSMENT_TOOL, assess_threat_level
+from app.graph.tools import ALL_TOOLS, TOOL_FUNCTIONS
+
+# 요청 하나당 이 이상 도구 호출 스텝을 밟지 않는다. Gemini 무료 tier 일일 한도를
+# 이미 여러 번 실측으로 소진해본 프로젝트라(docs/concepts/11-tool-calling-node-and-ragas-evaluation.md,
+# target-tracking-service의 ANALYSIS_COOLDOWN 등), 모델이 도구를 계속 연쇄 호출하며
+# 루프를 도는 최악의 경우에도 요청 하나가 쓰는 LLM 호출 수를 못박아둔다.
+MAX_TOOL_STEPS = 3
 
 if settings.ai_enabled:
     genai.configure(api_key=settings.gemini_api_key)
@@ -29,7 +37,7 @@ def _get_chat_model() -> genai.GenerativeModel:
 def _get_tool_model() -> genai.GenerativeModel:
     global _tool_model
     if _tool_model is None:
-        _tool_model = genai.GenerativeModel(settings.gemini_chat_model, tools=[THREAT_ASSESSMENT_TOOL])
+        _tool_model = genai.GenerativeModel(settings.gemini_chat_model, tools=[ALL_TOOLS])
     return _tool_model
 
 
@@ -77,35 +85,59 @@ def classify_question(question: str) -> str:
     return "doc_rag"
 
 
-def call_with_tools(prompt: str) -> dict:
-    """One Gemini turn with the threat-assessment tool bound.
+async def call_with_tools(prompt: str) -> list[dict]:
+    """멀티스텝 플래닝 에이전트: 모델이 스스로 판단해 0~MAX_TOOL_STEPS개의 도구를
+    순서대로 호출한다 (assess_threat_level → lookup_response_procedure →
+    check_intercept_asset_availability 같은 체인도 가능). 그래프가 어떤 도구를
+    부를지 강제하지 않는다 -- 매 스텝마다 "이 도구가 더 필요한가, 아니면 이제
+    답할 수 있는가"를 Gemini의 function-calling 응답(function_call vs 순수 텍스트)
+    으로 판단한다.
 
-    The model itself decides whether the question warrants calling
-    `assess_threat_level` -- this isn't a hardcoded branch, it's genuine
-    function-calling: Gemini returns a `function_call` part instead of text
-    when it decides the tool applies, we execute the real Python function,
-    and report what happened back to the caller (LangGraph node).
+    ChatSession을 써서 이전 스텝의 함수 호출/결과가 대화 히스토리에 자동으로
+    쌓이게 한다 -- 그래야 두 번째 도구를 고를 때 첫 번째 도구 결과를 모델이
+    참고할 수 있다.
     """
     if not settings.ai_enabled:
-        return {"tool_called": False, "tool_name": None, "tool_result": None}
+        return []
 
-    try:
-        response = _get_tool_model().generate_content(prompt)
-        part = response.candidates[0].content.parts[0]
+    calls: list[dict] = []
+    chat = _get_tool_model().start_chat()
+    message: str | genai.protos.Content = prompt
+
+    for _ in range(MAX_TOOL_STEPS):
+        try:
+            response = await asyncio.to_thread(chat.send_message, message)
+            part = response.candidates[0].content.parts[0]
+        except Exception:
+            break
+
         function_call = getattr(part, "function_call", None)
+        if not function_call or function_call.name not in TOOL_FUNCTIONS:
+            break  # 더 이상 도구가 필요 없다고 모델이 판단 -- 순수 텍스트 응답을 반환함
 
-        if function_call and function_call.name == "assess_threat_level":
-            args = dict(function_call.args)
-            result = assess_threat_level(
-                target_type=str(args.get("target_type", "")),
-                altitude=float(args.get("altitude", 0)),
-                speed=float(args.get("speed", 0)),
-            )
-            return {"tool_called": True, "tool_name": "assess_threat_level", "tool_result": result}
-    except Exception:
-        pass
+        fn = TOOL_FUNCTIONS[function_call.name]
+        args = dict(function_call.args)
+        try:
+            result = await fn(**args) if inspect.iscoroutinefunction(fn) else fn(**args)
+        except Exception as e:
+            result = f"도구 실행 실패: {e}"
 
-    return {"tool_called": False, "tool_name": None, "tool_result": None}
+        calls.append({"tool_called": True, "tool_name": function_call.name, "tool_result": str(result)})
+
+        # 함수 실행 결과를 다음 턴에 넘겨서, 모델이 이 결과를 바탕으로 다음 도구를
+        # 고를지 여기서 멈출지 스스로 판단하게 한다.
+        message = genai.protos.Content(
+            parts=[
+                genai.protos.Part(
+                    function_response=genai.protos.FunctionResponse(
+                        name=function_call.name,
+                        response={"result": str(result)},
+                    )
+                )
+            ]
+        )
+
+    return calls
 
 
 def generate_stream(prompt: str) -> Generator[str, None, None]:

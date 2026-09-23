@@ -15,7 +15,7 @@ from app.models.schemas import ChatRequest
 router = APIRouter()
 
 
-def _build_prompt(route: str, question: str, context: str, tool_call: dict | None) -> str:
+def _build_prompt(route: str, question: str, context: str, tool_calls: list[dict]) -> str:
     if route == "pattern_search":
         instruction = (
             "아래는 과거 탐지 이력 중 질문과 유사한 항목들이다. "
@@ -28,11 +28,9 @@ def _build_prompt(route: str, question: str, context: str, tool_call: dict | Non
         )
 
     tool_note = ""
-    if tool_call:
-        tool_note = (
-            f"\n\n[도구 호출 결과] assess_threat_level({tool_call['tool_name']}) → "
-            f"{tool_call['tool_result']} 등급. 답변에 이 등급을 반영하라."
-        )
+    if tool_calls:
+        steps = "\n".join(f"- {c['tool_name']} → {c['tool_result']}" for c in tool_calls)
+        tool_note = f"\n\n[도구 호출 결과 (순서대로)]\n{steps}\n이 결과들을 답변에 반영하라."
 
     return f"{instruction}\n\n[검색된 컨텍스트]\n{context}{tool_note}\n\n[질문]\n{question}\n\n[답변]"
 
@@ -42,13 +40,13 @@ async def _stream_chat(question: str) -> AsyncGenerator[str, None]:
     result = await classify_and_retrieve(question)
     route = result["route"]
     sources = result["sources"]
-    tool_call = result.get("tool_call")
-    prompt = _build_prompt(route, question, result["context"], tool_call)
+    tool_calls = result.get("tool_calls") or []
+    prompt = _build_prompt(route, question, result["context"], tool_calls)
 
     retrieval_latency_seconds.labels(route=route).observe(time.monotonic() - started)
     chat_route_total.labels(route=route).inc()
-    if tool_call:
-        tool_call_total.labels(tool_name=tool_call["tool_name"]).inc()
+    for call in tool_calls:
+        tool_call_total.labels(tool_name=call["tool_name"]).inc()
 
     queue: asyncio.Queue[str | BaseException | None] = asyncio.Queue()
     loop = asyncio.get_running_loop()
@@ -65,8 +63,8 @@ async def _stream_chat(question: str) -> AsyncGenerator[str, None]:
     loop.run_in_executor(None, produce)
 
     yield f"event: route\ndata: {json.dumps({'route': route})}\n\n"
-    if tool_call:
-        yield f"event: tool_call\ndata: {json.dumps(tool_call)}\n\n"
+    for call in tool_calls:
+        yield f"event: tool_call\ndata: {json.dumps(call)}\n\n"
 
     while True:
         item = await queue.get()
