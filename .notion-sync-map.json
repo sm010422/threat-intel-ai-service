@@ -1,4 +1,5 @@
 {
+  "docs/agent-planning.md": "3e450b17-ecd1-81da-a08c-ebaf17bffebb",
   "docs/architecture.md": "3e250b17-ecd1-810d-8cfe-f275b601a630",
   "docs/concepts/01-config-and-schemas.md": "3e250b17-ecd1-8194-9ae2-fd5ecf9d096a",
   "docs/concepts/02-gemini-client-and-graceful-degradation.md": "3e250b17-ecd1-811b-95d4-d4f1f52ce11b",
