@@ -1,5 +1,17 @@
 # 관측성 (Prometheus 계측 + RAGAS 회귀 게이트)
 
+## 요약: 지금 뭐가 떠 있고 뭐가 안 떠 있나
+
+**Prometheus 서버는 클러스터에 안 떠 있다.** 한 게 정확히는:
+
+1. 앱(`threat-intel-ai-service`)에 `prometheus-client` 라이브러리를 추가
+2. `GET /metrics` (외부 공개 경로는 `GET /ai/metrics`) 라우트를 하나 직접 만들어서, 요청이 올 때마다 그 순간까지 앱 안에 누적된 지표(Counter/Histogram 값)를 Prometheus 텍스트 포맷으로 즉석에서 렌더링해서 응답
+3. 이 엔드포인트를 실제로 주기적으로 긁어가서(scrape) 시계열로 저장·쿼리·그래프화하는 건 원래 Prometheus 서버(+Grafana)가 하는 일인데 **그 서버 자체를 새로 만들지 않았다**
+
+비유하면: "체온계는 몸에 붙여놨는데, 30분마다 값을 기록해서 그래프로 보여주는 간호사(Prometheus)는 아직 안 고용한" 상태다. `curl /ai/metrics`로 지금 이 순간의 누적 숫자는 언제든 볼 수 있지만, "어제보다 latency가 늘었나?" 같은 추세는 못 본다 — 누군가(Prometheus)가 그 값을 주기적으로 수집해서 쌓아둬야 하는데 지금은 안 쌓인다.
+
+**왜 이렇게 했는지는 아래 "왜 풀 스택을 새로 안 올렸나" 참고.**
+
 ## 왜 풀 스택(Prometheus 서버 + Grafana)을 새로 안 올렸나
 
 클러스터 실측 결과(2026-09-16, `k3s-msa-infrastructure` 관련 대화) worker 노드가 이미 메모리 70%대, load average가 vCPU 수를 넘는 상태였다. 여기에 Prometheus(TSDB, 지속적인 디스크/메모리 사용) + Grafana를 새 파드로 얹는 건 리소스 압박을 더 키우는 선택이라 보류했다.
