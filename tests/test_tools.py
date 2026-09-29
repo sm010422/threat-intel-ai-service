@@ -32,14 +32,30 @@ class TestAssessThreatLevel:
 
 
 class TestCheckInterceptAssetAvailability:
-    """실제 자산 관리 시스템과 무관한 시뮬레이션 데이터임을 명시하는 것도 검증한다."""
+    """2026-09-29: 랜덤 READY/COOLDOWN 시뮬레이션을 하버사인 거리 기반 실제 ETA
+    계산으로 교체했다 -- target-tracking-service의 AssetRecommendationService와
+    동일한 카탈로그/공식을 쓰는지 검증한다."""
 
     @pytest.mark.parametrize("target_type", ["DRONE", "MISSILE", "AIRCRAFT"])
-    def test_known_target_type_returns_assets_with_status(self, target_type):
+    def test_known_target_type_returns_ranked_assets_with_eta(self, target_type):
         result = check_intercept_asset_availability(target_type)
-        assert result.startswith("(시뮬레이션 데이터)")
-        assert "READY" in result or "COOLDOWN" in result
+        assert "ETA" in result
+        assert "km" in result
 
     def test_unknown_target_type_falls_back_gracefully(self):
         result = check_intercept_asset_availability("SUBMARINE")
-        assert "가용 자산 정보 없음" in result
+        assert "대응 가능한 자산이 카탈로그에 없습니다" in result
+
+    def test_seoul_area_target_prefers_nearby_asset(self):
+        result = check_intercept_asset_availability("DRONE", target_latitude=37.5665, target_longitude=126.9780)
+        assert result.startswith("K30 비호 대공포(수도권)")
+
+    def test_defaults_to_seoul_when_coordinates_omitted(self):
+        with_coords = check_intercept_asset_availability("DRONE", target_latitude=37.5665, target_longitude=126.9780)
+        without_coords = check_intercept_asset_availability("DRONE")
+        assert with_coords == without_coords
+
+    def test_far_away_target_can_be_marked_infeasible(self):
+        # 우크라이나 키이우 권역 -- 국내 자산의 연료/반응시간 예산을 훨씬 초과
+        result = check_intercept_asset_availability("DRONE", target_latitude=50.4501, target_longitude=30.5234)
+        assert "예산 초과" in result

@@ -3,7 +3,7 @@
 (app/llm/gemini_client.py 참고).
 """
 
-import random
+import math
 
 import google.generativeai as genai
 
@@ -93,17 +93,21 @@ async def lookup_response_procedure(threat_description: str) -> str:
 
 
 # --- 3. check_intercept_asset_availability ---------------------------------
-# 데모용 시뮬레이션 데이터 -- 실제 자산 관리 시스템과 연동되지 않는다. 이 포트폴리오에
-# "요격 자산" 개념 자체가 SITREP 문구("① 즉각 요격" 등)에만 있고 구조화된 데이터가
-# 없어서, 위협 지식 베이스(10개 패턴)처럼 정적 시드 데이터로 새로 만들었다.
-# READY/COOLDOWN을 매 호출마다 섞는 건 "항상 같은 답만 나오는 가짜 도구"처럼
-# 보이지 않게 하기 위함 -- 그래도 본질은 시뮬레이션이라는 점은 변하지 않는다.
+# 2026-09-29: "(시뮬레이션 데이터) READY/COOLDOWN 랜덤"이었던 걸 실제 하버사인
+# 거리 기반 ETA 계산으로 교체했다 -- MSS(Maven Smart System)의 "표적 지정 -> AI가
+# 연료/도달시간 계산해 top-3 추천" 패턴을 참고. target-tracking-service(Java)의
+# AssetRecommendationService/InterceptAssetCatalog와 완전히 동일한 자산
+# 카탈로그·공식을 써서 두 서비스가 같은 질문에 같은 답을 하도록 맞췄다
+# (assess_threat_level이 이미 그렇게 Java 쪽과 룰을 맞춰둔 것과 동일한 이유).
+# 채팅에서는 특정 표적의 정확한 좌표가 항상 주어지지 않으므로, 좌표를 안 주면
+# 수도권 방어 구역 기준점(서울, AdsbFiPollingService의 KOREA 권역과 동일)으로 계산한다.
 
 CHECK_INTERCEPT_ASSET_DECLARATION = genai.protos.FunctionDeclaration(
     name="check_intercept_asset_availability",
     description=(
-        "표적 유형에 대응 가능한 요격 자산의 현재 가용 상태를 조회한다 (데모용 "
-        "시뮬레이션 데이터, 실제 자산 관리 시스템과 무관). 실제 대응 조치를 취할 "
+        "표적 유형과 위치(위도/경도, 생략 시 서울 기준)에 대해 요격 가능한 자산을 "
+        "도달예상시간(ETA) 순으로 최대 3개 추천한다. 거리 기반 실제 계산 결과이며 "
+        "탄약/연료 예산 초과 시 feasible=false로 표시된다. 실제 대응 조치를 취할 "
         "여력이 있는지 판단해야 하는 질문에 답할 때 호출한다."
     ),
     parameters=genai.protos.Schema(
@@ -113,22 +117,69 @@ CHECK_INTERCEPT_ASSET_DECLARATION = genai.protos.FunctionDeclaration(
                 type=genai.protos.Type.STRING,
                 description="DRONE, MISSILE, AIRCRAFT 중 하나",
             ),
+            "target_latitude": genai.protos.Schema(
+                type=genai.protos.Type.NUMBER, description="표적 위도 (생략 시 서울 37.5665)"
+            ),
+            "target_longitude": genai.protos.Schema(
+                type=genai.protos.Type.NUMBER, description="표적 경도 (생략 시 서울 126.9780)"
+            ),
         },
         required=["target_type"],
     ),
 )
 
-_INTERCEPT_ASSETS = {
-    "DRONE": ["근접방어화기(CIWS) 1문대", "대드론 재밍 시스템 2기"],
-    "MISSILE": ["패트리어트 포대 1개", "천궁-II 포대 1개"],
-    "AIRCRAFT": ["KF-21 대기편대 2대", "지대공 미사일 포대 1개"],
-}
+_SEOUL_LAT, _SEOUL_LON = 37.5665, 126.9780
+_EARTH_RADIUS_KM = 6371.0
+
+# target-tracking-service/domain/asset/InterceptAssetCatalog.java와 동일한 자산·수치.
+_INTERCEPT_ASSETS = [
+    {"name": "F-15K 요격편대(오산)", "types": {"AIRCRAFT", "MISSILE"},
+     "lat": 37.0906, "lon": 127.0296, "speed_kmh": 2000.0, "endurance_min": 90.0, "ammo": 4},
+    {"name": "KF-21 초계편대(수원)", "types": {"AIRCRAFT", "DRONE"},
+     "lat": 37.2394, "lon": 127.0079, "speed_kmh": 1800.0, "endurance_min": 100.0, "ammo": 6},
+    {"name": "PAC-3 패트리엇 포대(평택)", "types": {"MISSILE"},
+     "lat": 36.9921, "lon": 127.0890, "speed_kmh": 5000.0, "endurance_min": 15.0, "ammo": 8},
+    {"name": "K30 비호 대공포(수도권)", "types": {"DRONE"},
+     "lat": 37.5665, "lon": 126.9780, "speed_kmh": 3000.0, "endurance_min": 10.0, "ammo": 200},
+    {"name": "요격 드론 대대(김포)", "types": {"DRONE"},
+     "lat": 37.5583, "lon": 126.7906, "speed_kmh": 150.0, "endurance_min": 40.0, "ammo": 10},
+]
 
 
-def check_intercept_asset_availability(target_type: str) -> str:
-    assets = _INTERCEPT_ASSETS.get(str(target_type).upper(), ["가용 자산 정보 없음"])
-    statuses = [f"{asset}: {random.choice(['READY', 'READY', 'COOLDOWN'])}" for asset in assets]
-    return "(시뮬레이션 데이터) " + "; ".join(statuses)
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    d_lat = math.radians(lat2 - lat1)
+    d_lon = math.radians(lon2 - lon1)
+    a = (math.sin(d_lat / 2) ** 2
+         + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(d_lon / 2) ** 2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return _EARTH_RADIUS_KM * c
+
+
+def check_intercept_asset_availability(
+    target_type: str, target_latitude: float | None = None, target_longitude: float | None = None
+) -> str:
+    target_type = str(target_type).upper()
+    lat = _SEOUL_LAT if target_latitude is None else float(target_latitude)
+    lon = _SEOUL_LON if target_longitude is None else float(target_longitude)
+
+    candidates = [asset for asset in _INTERCEPT_ASSETS if target_type in asset["types"]]
+    if not candidates:
+        return f"'{target_type}' 유형에 대응 가능한 자산이 카탈로그에 없습니다."
+
+    ranked = []
+    for asset in candidates:
+        distance_km = _haversine_km(asset["lat"], asset["lon"], lat, lon)
+        eta_minutes = distance_km / asset["speed_kmh"] * 60
+        feasible = asset["ammo"] > 0 and eta_minutes <= asset["endurance_min"]
+        ranked.append((asset["name"], distance_km, eta_minutes, asset["ammo"], feasible))
+    ranked.sort(key=lambda r: r[2])
+
+    lines = [
+        f"{name}: 거리 {distance_km:.0f}km, ETA {eta_minutes:.1f}분, 탄약 {ammo}, "
+        f"{'투입 가능' if feasible else '예산 초과(투입 어려움)'}"
+        for name, distance_km, eta_minutes, ammo, feasible in ranked[:3]
+    ]
+    return "; ".join(lines)
 
 
 ALL_TOOLS = genai.protos.Tool(
