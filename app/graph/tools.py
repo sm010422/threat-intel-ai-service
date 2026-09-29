@@ -25,9 +25,9 @@ ASSESS_THREAT_LEVEL_DECLARATION = genai.protos.FunctionDeclaration(
         properties={
             "target_type": genai.protos.Schema(
                 type=genai.protos.Type.STRING,
-                description="DRONE, MISSILE, AIRCRAFT 중 하나",
+                description="DRONE, MISSILE, AIRCRAFT, SHIP 중 하나",
             ),
-            "altitude": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="고도(m)"),
+            "altitude": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="고도(m), SHIP은 0"),
             "speed": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="속도(km/h)"),
         },
         required=["target_type", "altitude", "speed"],
@@ -50,6 +50,11 @@ def assess_threat_level(target_type: str, altitude: float, speed: float) -> str:
         return "HIGH"
     if target_type == "AIRCRAFT" and speed > 800 and altitude < 500:
         return "HIGH"
+    # target-tracking-service(Java)와 동일한 룰(상선 순항 속도 대비 이례적 고속).
+    # 단 MMSI 형식 검사는 targetId가 이 함수 시그니처에 없어서 Java 쪽에만 있다 --
+    # 이 도구는 채팅 질의용 범용 함수라 시그니처를 안 늘렸다.
+    if target_type == "SHIP" and speed > 60:
+        return "MEDIUM"
     if speed > 200:
         return "MEDIUM"
     return "LOW"

@@ -20,6 +20,8 @@ class TestAssessThreatLevel:
             ("AIRCRAFT", 400, 850, "HIGH"),  # 속도>800 & 고도<500
             ("AIRCRAFT", 5000, 250, "MEDIUM"),  # 속도>200
             ("AIRCRAFT", 5000, 100, "LOW"),
+            ("SHIP", 0, 80, "MEDIUM"),  # 상선 순항 속도(30km/h대) 대비 이례적 고속
+            ("SHIP", 0, 20, "LOW"),
         ],
     )
     def test_rule_table(self, target_type, altitude, speed, expected):
